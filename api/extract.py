@@ -1,5 +1,5 @@
 from http.server import BaseHTTPRequestHandler
-import json, re, fitz
+import json, re, base64, fitz
 
 class handler(BaseHTTPRequestHandler):
 
@@ -11,21 +11,28 @@ class handler(BaseHTTPRequestHandler):
     def do_POST(self):
         try:
             n = int(self.headers.get('Content-Length', 0))
-            pdf_bytes = self.rfile.read(n)
+            body = self.rfile.read(n)
+
+            # Accept base64 JSON  {"pdf": "<base64>"}
+            data = json.loads(body)
+            pdf_bytes = base64.b64decode(data['pdf'])
+
             vocab = extract_vocab(pdf_bytes)
-            body = json.dumps(vocab, ensure_ascii=False).encode('utf-8')
+            response = json.dumps(vocab, ensure_ascii=False).encode('utf-8')
+
             self.send_response(200)
             self.send_header('Content-Type', 'application/json; charset=utf-8')
             self._cors()
             self.end_headers()
-            self.wfile.write(body)
+            self.wfile.write(response)
+
         except Exception as e:
-            body = json.dumps({'error': str(e)}).encode('utf-8')
+            error = json.dumps({'error': str(e)}).encode('utf-8')
             self.send_response(500)
             self.send_header('Content-Type', 'application/json')
             self._cors()
             self.end_headers()
-            self.wfile.write(body)
+            self.wfile.write(error)
 
     def _cors(self):
         self.send_header('Access-Control-Allow-Origin', '*')
@@ -45,7 +52,7 @@ def extract_vocab(pdf_bytes):
         for b in sorted(page.get_text("dict")["blocks"], key=lambda b: b["bbox"][1]):
             if b["bbox"][0] < RX:
                 continue
-            if b["type"] == 1:          # image block → skip definition
+            if b["type"] == 1:          # image block
                 spans.append({"kind": "image"})
                 continue
             for line in b["lines"]:
@@ -89,4 +96,5 @@ def extract_vocab(pdf_bytes):
 
     return [{"it": e["term"], "def": e["def"]}
             for e in entries if len(e["def"].split()) >= 3]
+
 
