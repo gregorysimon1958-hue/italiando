@@ -89,3 +89,4 @@ def extract_vocab(pdf_bytes):
 
     return [{"it": e["term"], "def": e["def"]}
             for e in entries if len(e["def"].split()) >= 3]
+
